@@ -6,7 +6,7 @@ Using the Arduino IDE, you can flash this program onto your nodeMCU.
 
 ## Hardware
 
-We currently use a nodeMCU v2 with a DHT22 that is reading from pin D7 aka 13.
+We currently use a nodeMCU v2 with a DHT22 that is writing to pin D7 aka 13.
 
 ## Software
 
@@ -21,6 +21,6 @@ Next, go to **Tools** > **Boards** > **Board Manager** and search for *esp8266 b
 This projects relies on a couple of third party libraries. You can install all of them through the Library Manager in the Arduino IDE.
 
 - **NTPClient** by Frabrice Weinberg for fetching accurate times
-- **WiFI** by Arduino for working with WiFi
+- **WiFi** by Arduino for working with WiFi
 - **ArduinoJSON** by Benoit Blanchon for easily building a JSON payload
 - **DHT Sensor Library** by AdaFruit for a nice sensor reading interface
