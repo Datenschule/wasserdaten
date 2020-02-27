@@ -71,7 +71,7 @@ input[type=submit]:disabled {
       <main>
         <h1>Configuration</h1>
         <p>Enter the name of the network (SSID) and the password below and hit <em>save</em>.</p>
-        <p>The restart the board. It will try to log into the network you configured.</p>
+        <p>Then restart the board. It will try to log into the network you configured.</p>
         <form method="POST" action="/post_config">
           <label>
             SSID
@@ -83,6 +83,7 @@ input[type=submit]:disabled {
           </label>
           <input type="submit" value="Save">
         </form>
+        <div id="output"></div>
       </main>
       <footer>
         <p>A project by<br>
@@ -112,12 +113,19 @@ input[type=submit]:disabled {
      document.querySelector('form').addEventListener('submit', function(e) {
        e.preventDefault();
        document.querySelector('input[type=submit]').setAttribute("disabled", true);
-       let new_ssid = document.querySelector('#new_ssid').value;
+       let new_ssid = document.querySelector('#new_ssid').value.trim();
        let new_pw = document.querySelector('#new_password').value;
 
        postData('/post_config', { new_ssid: new_ssid, new_password: new_pw })
          .then((data) => {
-           console.log(data); // JSON data parsed by `response.json()` call
+           if (data['success']) {
+             document.querySelector('input[type=submit]').remove();
+             document.querySelector('#output').innerHTML = "<p>Saved network credentials. Restart the board!</p>";
+             console.log(data); // JSON data parsed by `response.json()` call
+           } else if (data['error']) {
+             document.querySelector('input[type=submit]').removeAttribute('disabled');
+             document.querySelector('#output').innerHTML = "<p>An error occurred while trying to save your network credentials.</p>";
+           }
          });
      })
     </script>
