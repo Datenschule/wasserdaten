@@ -22,6 +22,9 @@ NTPClient timeClient(ntpUDP, NTP_ADDRESS, NTP_OFFSET, NTP_INTERVAL);
 
 ESP8266WebServer server(80);
 
+#define FIVEMIN (1000UL * 60 * 1)
+unsigned long rolltime = millis() + FIVEMIN;
+
 //**
 // Change these to what you need!
 //**
@@ -31,28 +34,25 @@ const String post_endpoint = "http://"+ host + "/send-data"; // also sinatraserv
 const String software_version = "0.0.1";
 const int sampling_rate = 9600;
 
-//todo
-// do not instantiate here, we need to fill in later 
-const char* ssid = "sensor-ap";
-const char* password = "password";
-//const char *ssid = "<3";  //ENTER YOUR WIFI SETTINGS
-//const char *password = "datalove";
+const int networkCredAddress = 10;
+bool networkCredSet = false;
+String networkCredSeparator = "####";
+int networkCredSeparatorLength = networkCredSeparator.length();
+uint32_t chipid;
 
-#define FIVEMIN (1000UL * 60 * 1)
-unsigned long rolltime = millis() + FIVEMIN;
-
-// EEPROM stuff
 void writeString(char add, String data);
 String read_String(char add);
-// ntp time stuff
+void clearStorage();
+
 String getTimeStampString();
-// web stuff
+
 String packPayload();
 void sendData();
 void handleRoot();
 void handleConfig();
 void handlePostConfig();
 void handleGetStorage(); // debugging route, will ideally be deleted
+void handleReset();
 
 
 void setup() {
@@ -60,54 +60,79 @@ void setup() {
   Serial.begin(sampling_rate);
   timeClient.begin();
   dht.begin();
-  EEPROM.begin(512);
 
-  // we probs need to read from eeprom here and go from there
-  
+  chipid = ESP.getChipId();
+  EEPROM.begin(512);
+  WiFi.hostname("Wassersensor-" + String(chipid));
   WiFi.mode(WIFI_OFF);        //Prevents reconnection issue (taking too long to connect)
   delay(1000);
-  
-  // if no ssid and pw are set,
-  // then go WIFI_AP mode
-  WiFi.mode(WIFI_AP);  
-  WiFi.softAP(ssid, password);
-  Serial.println("");
-  Serial.print("AccessPoint: ");
-  Serial.println(ssid);
-  Serial.print("IP address: ");
-  Serial.println(WiFi.softAPIP());
-  
-  // else WIFI_STA mode
-  //WiFi.mode(WIFI_STA);        //This line hides the viewing of ESP as wifi hotspot
-  //WiFi.begin(ssid, password);     //Connect to your WiFi router
 
-  //Serial.print("Connecting");
-  // Wait for connection
-  //while (WiFi.status() != WL_CONNECTED) {
-  //  delay(500);
-  //  Serial.print(".");
-  //}
-  //Serial.println("");
-  //Serial.print("Connected to ");
-  //Serial.println(ssid);
-  //Serial.print("IP address: ");
-  //Serial.println(WiFi.localIP());  //IP address assigned to your ESP
+  // this does not work
+  // maybe only writing a 1 byte flag will do better?
+  String ssid;
+  String pw;
+  String data;
+  
+  data = read_String(networkCredAddress);
+  int pos = data.indexOf("####");
+  ssid = data.substring(0, pos);
+  pw = data.substring(pos + 4);
+
+  if (ssid != "" && pw != "") {
+      networkCredSet = true;
+      Serial.println("Found cred, looks legit");
+  }
+
+  if (networkCredSet) {
+    WiFi.mode(WIFI_STA);     
+    WiFi.begin(ssid, pw);
+
+    Serial.print("Connecting");
+    // Wait for connection
+    while (WiFi.status() != WL_CONNECTED) {
+      delay(500);
+      Serial.print(".");
+    }
+    Serial.println("");
+    Serial.print("Connected to ");
+    Serial.println(ssid);
+    Serial.print("IP address: ");
+    Serial.println(WiFi.localIP());  //IP address assigned to your ESP
+    Serial.print("Hostname: ");
+    Serial.println("Wassersensor-" + String(chipid));
+  } else {
+    // set default values
+    ssid = "sensor-ap";
+    pw = "password";
+    WiFi.mode(WIFI_AP);  
+    WiFi.softAP(ssid, pw);
+    Serial.println("");
+    Serial.print("AccessPoint: ");
+    Serial.println(ssid);
+    Serial.print("IP address: ");
+    Serial.println(WiFi.softAPIP());
+  }
 
   // defining routes for webserver
   server.on("/", handleRoot);
   server.on("/config", handleConfig);
   server.on("/post_config", handlePostConfig);
   server.on("/get_storage", handleGetStorage);
+  server.on("/reset", handleReset);
   server.begin();
 }
 
 
 void loop() {
-  timeClient.update();
+  if (networkCredSet) {
+    timeClient.update();
 
-  if((long)(millis() - rolltime) >= 0) {
-    sendData();
-    rolltime += FIVEMIN;
+    if((long)(millis() - rolltime) >= 0) {
+      sendData();
+      rolltime += FIVEMIN;
+    }
+  } else {
+    //Serial.println("no connection, indleing");  
   }
   server.handleClient(); 
   delay(100);
@@ -135,7 +160,7 @@ void handlePostConfig() {
   if (new_ssid && new_password) {
       String s1 = String(new_ssid);
       String s2 = String(new_password);
-      writeString(10, s1 + "####" + s2);
+      writeString(networkCredAddress, s1 + "####" + s2);
       server.send(200, "application/json", "{\"success\": \"SSID and password saved\"}");
   }
   server.send(400, "application/json", "{\"error\": \"Not right\"}");
@@ -145,18 +170,30 @@ void handleGetStorage() {
   String ssidData;
   String pwData;
   String data;
-  data = read_String(10);
+  data = read_String(networkCredAddress);
   int pos = data.indexOf("####");
-  ssidData = data.substring(0, pos);
-  pwData = data.substring(pos + 4);
-  server.send(200, "application/json", "{\"ssid\": \""+ ssidData +"\", \"pw\": \"" + pwData +"\"}");
+  if (pos) {
+    ssidData = data.substring(0, pos);
+    pwData = data.substring(pos + 4);
+    server.send(200, "application/json", "{\"ssid\": \""+ ssidData +"\", \"pw\": \"" + pwData +"\"}"); 
+  } else {
+    Serial.println("Error: Could not find position of separator");  
+  }
+}
+
+void handleReset() {
+  clearStorage();
+  server.send(200, "application/json", "{\"notice\": \"Storage cleared\"}"); 
 }
 
 
 void sendData() {
   HTTPClient http;
   http.begin(post_endpoint);
+  http.addHeader("X-Token", "whatisthis");
   http.addHeader("Content-Type", "application/json");
+  //http.addHeader("X-Pin", "?");
+  http.addHeader("X-Sensor", "esp8266-" + String(chipid));
   int httpCode = http.POST(packPayload());
   String payload = http.getString();
   if (Serial) {
@@ -177,7 +214,7 @@ String packPayload() {
   root["software_version"] = software_version;
   root["timestamp"] = getTimeStampString();
   root["sampling_rate"] = sampling_rate;
-  root["sensor"] = "DHT22";
+  root["sensor"] = chipid;
   JsonArray measurements = root.createNestedArray("sensordatavalues");
   JsonObject measurement1 = measurements.createNestedObject();
   measurement1["value_type"] = "temperature";
@@ -217,6 +254,13 @@ String read_String(char add) {
   }
   data[len] = '\0';
   return String(data);
+}
+
+void clearStorage() {
+  for (int i = 0; i < 512; i++) {
+    EEPROM.write(i, 0);
+  }  
+  EEPROM.commit();
 }
 
 //

@@ -9,6 +9,7 @@ class App < Sinatra::Base
 
   post '/send-data' do
     data = JSON.parse( request.body.read.to_s )
+    puts headers
     puts data
     'thanks'
   end
