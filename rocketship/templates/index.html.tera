@@ -1,0 +1,34 @@
+{% extends "base" %}
+{% block lang %}{{ lang }}{% endblock lang %}
+{% block title %}OpenWaterData by OKF Datenschule{% endblock title %}
+
+{% block content %}
+<h1>OpenWaterData</h1>
+
+<p>OpenWaterData is a hardware prototype to measure and collect water quality data.</p>
+<p>It is inspired by <a href="https://sensor.community/en/">Sensor.community</a> and the actual prototype is based on the <a href="https://publiclab.org/notes/wmacfarl/01-10-2020/building-the-simple-water-sensor-platform">Simple Wate Sensor Platform by Public Lab</a>.</p>
+
+<h2>Status of OpenWaterData</h2>
+<p>We're documenting the project on the Datenschule blog in German.</p>
+<ul>
+  <li><a href="https://datenschule.de/blog/2020/03/Wasserqualit%C3%A4t-messen-wir-starten-Projekt-OpenWaterData/">Project Start [DE]</a></li>
+</ul>
+
+<h2>API</h2>
+<p>This service provides a simple read only API for testing purposes. It is a work in progress and unstable.</p>
+<pre><code>
+GET /api/v1/measurements
+GET /api/v1/measurement/measurement_id
+GET /api/v1/sensors
+GET /api/v1/sensor/sensor_id
+GET /api/v1/labs
+GET /api/v1/lab/lab_id
+GET /api/v1/phenomena
+GET /api/v1/phenomenon/phen_id
+</code></pre>
+
+<p>One POST endpoint is available for the prototypes to post their data to, it's modeled after <a href="https://api.sensor.community/v1/push-sensor-data/">Sensor.community's.</a></p>
+<pre>POST /api/v1/post-sensor-data</pre>
+
+<p>Code available on <a href="https://github.com/Datenschule/wasserdaten" title="OpenWaterData codebase on GitHub">GitHub</a>.</p>
+{% endblock content %}

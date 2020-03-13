@@ -1,0 +1,34 @@
+version: '3'
+
+networks:
+  openwaterdata-net:
+
+services:
+  db:
+    image: postgres:11.7
+    restart: unless-stopped
+    volumes:
+      - ./postgres-vol:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    networks:
+      openwaterdata-net:
+        aliases:
+          - db
+  web:
+    restart: unless-stopped
+    build: .
+    depends_on:
+      - db
+    environment:
+      ROCKET_ENV: "production"
+      ROCKET_SECRET_KEY: "${ROCKET_SECRET_KEY}"
+      DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}"
+    ports:
+      - "8000:8000"
+    networks:
+      openwaterdata-net:
+        aliases:
+          - web

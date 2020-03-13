@@ -1,53 +1,54 @@
+/*
+ * NodeMCU esp8266 - Data sender
+ * 
+ * Pinout
+ * 
+ * D2 (Rx) -> Arduino 2 (Tx)
+ * D3 (Tx) -> Arduino 3 (Rx)
+ * 
+ * 
+ * NodeMCU and Arduino need to share GND
+ */
+
+#include <ArduinoJson.h>
 #include <EEPROM.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266HTTPClient.h>
+#include <SoftwareSerial.h>
 #include <WiFiClient.h>
 #include <WiFiUdp.h>
-#include <ArduinoJson.h>
-#include <NTPClient.h>
-#include <DHT.h>
 
 #include "./lib/web/config.h"
 
-#define DHTPIN 13 // aka D7 on nodemcu v2
-#define DHTTYPE DHT22
-DHT dht(DHTPIN, DHTTYPE);
-
-#define NTP_OFFSET   60 * 60      // In seconds
-#define NTP_INTERVAL 60 * 1000    // In miliseconds
-#define NTP_ADDRESS  "europe.pool.ntp.org"
-WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP, NTP_ADDRESS, NTP_OFFSET, NTP_INTERVAL);
+#define sendingInterval (1000UL * 60 * 5)
 
 ESP8266WebServer server(80);
-
-#define FIVEMIN (1000UL * 60 * 1)
-unsigned long rolltime = millis() + FIVEMIN;
+SoftwareSerial s(D2,D3); // (Rx, Tx)
 
 //**
 // Change these to what you need!
 //**
-const String host = "10.10.10.209:3000"; // local IP of sinatraserver
-const String post_endpoint = "http://"+ host + "/send-data"; // also sinatraserver
+const String host = "192.168.178.39:8000"; // local IP of server
+const String post_endpoint = "http://"+ host + "/api/v1/post-sensor-data"; // also server
 
 const String software_version = "0.0.1";
-const int sampling_rate = 9600;
 
 const int networkCredAddress = 10;
 bool networkCredSet = false;
 String networkCredSeparator = "####";
 int networkCredSeparatorLength = networkCredSeparator.length();
 uint32_t chipid;
+String mac_address;
 
+//**
+// Function declarations
+//**
 void writeString(char add, String data);
 String read_String(char add);
 void clearStorage();
-
-String getTimeStampString();
-
-String packPayload();
-void sendData();
+void sendTemperature(float t, float h);
+void sendMoisture(int m);
 void handleRoot();
 void handleConfig();
 void handlePostConfig();
@@ -56,19 +57,17 @@ void handleReset();
 
 
 void setup() {
-  delay(1000);
-  Serial.begin(sampling_rate);
-  timeClient.begin();
-  dht.begin();
-
-  chipid = ESP.getChipId();
+  delay(500);
+  s.begin(4800); // same as Arduino
+  Serial.begin(9600);
   EEPROM.begin(512);
+  
+  chipid = ESP.getChipId();
+  mac_address = WiFi.macAddress();
   WiFi.hostname("Wassersensor-" + String(chipid));
   WiFi.mode(WIFI_OFF);        //Prevents reconnection issue (taking too long to connect)
-  delay(1000);
+  delay(500);
 
-  // this does not work
-  // maybe only writing a 1 byte flag will do better?
   String ssid;
   String pw;
   String data;
@@ -77,18 +76,18 @@ void setup() {
   int pos = data.indexOf("####");
   ssid = data.substring(0, pos);
   pw = data.substring(pos + 4);
-
+  
   if (ssid != "" && pw != "") {
       networkCredSet = true;
       Serial.println("Found cred, looks legit");
   }
+  
 
   if (networkCredSet) {
     WiFi.mode(WIFI_STA);     
     WiFi.begin(ssid, pw);
 
     Serial.print("Connecting");
-    // Wait for connection
     while (WiFi.status() != WL_CONNECTED) {
       delay(500);
       Serial.print(".");
@@ -99,10 +98,9 @@ void setup() {
     Serial.print("IP address: ");
     Serial.println(WiFi.localIP());  //IP address assigned to your ESP
     Serial.print("Hostname: ");
-    Serial.println("Wassersensor-" + String(chipid));
+    Serial.println("WaterLab-" + String(chipid));
   } else {
-    // set default values
-    ssid = "sensor-ap";
+    ssid = "WaterLab";
     pw = "password";
     WiFi.mode(WIFI_AP);  
     WiFi.softAP(ssid, pw);
@@ -113,7 +111,6 @@ void setup() {
     Serial.println(WiFi.softAPIP());
   }
 
-  // defining routes for webserver
   server.on("/", handleRoot);
   server.on("/config", handleConfig);
   server.on("/post_config", handlePostConfig);
@@ -124,25 +121,49 @@ void setup() {
 
 
 void loop() {
-  if (networkCredSet) {
-    timeClient.update();
-
-    if((long)(millis() - rolltime) >= 0) {
-      sendData();
-      rolltime += FIVEMIN;
-    }
-  } else {
-    //Serial.println("no connection, indleing");  
-  }
   server.handleClient(); 
-  delay(100);
+  
+  static unsigned long sendingTime = millis();
+  if (networkCredSet) {
+    if(millis()- sendingTime > sendingInterval) {    
+      if (s.available() > 0) {
+        String data = s.readStringUntil('\n');
+        //Serial.println(data);
+        char charBuf[data.length()];
+        data.toCharArray(charBuf, data.length());
+        
+        StaticJsonDocument<500> jsonBuffer;
+        DeserializationError error;
+        error = deserializeJson(jsonBuffer, charBuf, DeserializationOption::NestingLimit(10));
+      
+        if (error) {
+          Serial.println(error.c_str());
+          return;
+        }
+        serializeJsonPretty(jsonBuffer, Serial);
+
+        float t = jsonBuffer["temperature"];
+        float h = jsonBuffer["humidity"];
+        if (!isnan(t) && !isnan(h)) {
+          sendTemperature(t, h);
+        }
+
+        int m = jsonBuffer["moisture"];
+        if (!isnan(m)) {
+          sendMoisture(m);
+        }
+        
+        sendingTime = millis();
+      }
+    }
+  }
 }
 
-//
-// ROUTE HANDLING
-//
+/*
+ * ROUTE HANDLING
+ */
 void handleRoot() {
-  String webPage = packPayload();
+  String webPage = "{\"notice\": \"Nothing here atm\"}";
   server.send(200, "application/json", webPage);
 }
 
@@ -183,38 +204,21 @@ void handleGetStorage() {
 
 void handleReset() {
   clearStorage();
-  server.send(200, "application/json", "{\"notice\": \"Storage cleared\"}"); 
+  server.send(200, "application/json", "{\"notice\": \"You won't even see this\"}"); 
 }
 
-
-void sendData() {
+void sendTemperature(float t, float h) {
   HTTPClient http;
   http.begin(post_endpoint);
-  http.addHeader("X-Token", "whatisthis");
   http.addHeader("Content-Type", "application/json");
-  //http.addHeader("X-Pin", "?");
-  http.addHeader("X-Sensor", "esp8266-" + String(chipid));
-  int httpCode = http.POST(packPayload());
-  String payload = http.getString();
-  if (Serial) {
-    Serial.println(httpCode);
-    Serial.println(payload);
-  }
-  http.end();
-}
-
-String packPayload() {
-  String webPage;
-  StaticJsonDocument<500> jsonBuffer;
+  http.addHeader("X-Sensor", "esp8266-" + mac_address);
+  http.addHeader("X-Pin", "8"); // should be config var
+  
+  String payload;
+  StaticJsonDocument<300> jsonBuffer;
   JsonObject root = jsonBuffer.createNestedObject("data");
-
-  float t = dht.readTemperature();
-  float h = dht.readHumidity();
-
   root["software_version"] = software_version;
-  root["timestamp"] = getTimeStampString();
-  root["sampling_rate"] = sampling_rate;
-  root["sensor"] = chipid;
+  root["sensor"] = "DHT22";
   JsonArray measurements = root.createNestedArray("sensordatavalues");
   JsonObject measurement1 = measurements.createNestedObject();
   measurement1["value_type"] = "temperature";
@@ -222,14 +226,38 @@ String packPayload() {
   JsonObject measurement2 = measurements.createNestedObject();
   measurement2["value_type"] = "humidity";
   measurement2["value"] = h;
+  serializeJson(root, payload);
 
-  serializeJson(root, webPage);
-  return webPage;
+  int httpCode = http.POST(payload);
+  http.end();
 }
 
-//
-// EEPROM helpers
-//
+void sendMoisture(int m) {
+  HTTPClient http;
+  http.begin(post_endpoint);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("X-Sensor", "esp8266-" + mac_address);
+  http.addHeader("X-Pin", "14"); // should be config var
+  
+  String payload;
+  StaticJsonDocument<300> jsonBuffer;
+  JsonObject root = jsonBuffer.createNestedObject("data");
+  root["software_version"] = software_version;
+  root["sensor"] = "CSMS";
+  JsonArray measurements = root.createNestedArray("sensordatavalues");
+  JsonObject measurement1 = measurements.createNestedObject();
+  measurement1["value_type"] = "moisture";
+  measurement1["value"] = m;
+  serializeJson(root, payload);
+
+  int httpCode = http.POST(payload);
+  http.end();
+}
+
+
+/*
+ * EEPROM helpers
+ */
 void writeString(char add, String data) {
   int _size = data.length();
   int i;
@@ -261,34 +289,4 @@ void clearStorage() {
     EEPROM.write(i, 0);
   }  
   EEPROM.commit();
-}
-
-//
-// TIME HELPER
-// https://github.com/arduino-libraries/NTPClient/issues/36#issuecomment-439631673
-String getTimeStampString() {
-   time_t rawtime = timeClient.getEpochTime();
-   struct tm * ti;
-   ti = localtime (&rawtime);
-
-   uint16_t year = ti->tm_year + 1900;
-   String yearStr = String(year);
-
-   uint8_t month = ti->tm_mon + 1;
-   String monthStr = month < 10 ? "0" + String(month) : String(month);
-
-   uint8_t day = ti->tm_mday;
-   String dayStr = day < 10 ? "0" + String(day) : String(day);
-
-   uint8_t hours = ti->tm_hour;
-   String hoursStr = hours < 10 ? "0" + String(hours) : String(hours);
-
-   uint8_t minutes = ti->tm_min;
-   String minuteStr = minutes < 10 ? "0" + String(minutes) : String(minutes);
-
-   uint8_t seconds = ti->tm_sec;
-   String secondStr = seconds < 10 ? "0" + String(seconds) : String(seconds);
-
-   return yearStr + "-" + monthStr + "-" + dayStr + " " +
-          hoursStr + ":" + minuteStr + ":" + secondStr;
 }

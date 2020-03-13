@@ -1,0 +1,7 @@
+{% extends "base" %}
+{% block lang %}{{ lang }}{% endblock lang %}
+{% block title %}{{ title }}{% endblock title %}
+
+{% block content %}
+<img src="https://http.cat/404" alt="404 - not found">
+{% endblock content %}

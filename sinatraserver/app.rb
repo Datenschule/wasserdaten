@@ -8,8 +8,9 @@ class App < Sinatra::Base
   end
 
   post '/send-data' do
+    #puts JSON.pretty_generate(request.env)
+    #puts "+++++++++++++++++++++"
     data = JSON.parse( request.body.read.to_s )
-    puts headers
     puts data
     'thanks'
   end

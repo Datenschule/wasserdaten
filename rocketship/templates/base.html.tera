@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="{% block lang %}{% endblock lang %}">
+  <head>
+    {% block head %}
+    <meta charset="UTF-8">
+    <title>{% block title %}{% endblock title %}</title>
+    {% endblock head %}
+  </head>
+  <body>
+    <main id="content">{% block content %}{% endblock content %}</main>
+    <footer id="footer">
+      {% block footer %}
+      <p>A project by <a href="https://okfn.de" title="Open Knowledge Foundation Deutschland e.V.">OKF DE</a> <a href="https://datenschule.de">Datenschule</a></p>
+      {% endblock footer %}
+    </footer>
+  </body>
+</html>
