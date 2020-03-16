@@ -87,17 +87,34 @@ void setup() {
     WiFi.begin(ssid, pw);
 
     Serial.print("Connecting");
-    while (WiFi.status() != WL_CONNECTED) {
+    int try_counter = 0;
+    while (WiFi.status() != WL_CONNECTED && try_counter < 20) {
       delay(500);
       Serial.print(".");
+      try_counter++;
     }
-    Serial.println("");
-    Serial.print("Connected to ");
-    Serial.println(ssid);
-    Serial.print("IP address: ");
-    Serial.println(WiFi.localIP());  //IP address assigned to your ESP
-    Serial.print("Hostname: ");
-    Serial.println("WaterLab-" + String(chipid));
+    if (WiFi.status() == WL_CONNECTED) {
+      Serial.print("Connected to ");
+      Serial.println(ssid);
+      Serial.print("IP address: ");
+      Serial.println(WiFi.localIP());  //IP address assigned to your ESP
+      Serial.print("Hostname: ");
+      Serial.println("WaterLab-" + String(chipid));
+    } else {
+      // this should be nicer
+      // when creds were set but it still can't connect
+      Serial.println("");
+      Serial.println("Could not connect to credentials, opening access point");
+      ssid = "WaterLab";
+      pw = "password";
+      WiFi.mode(WIFI_AP);  
+      WiFi.softAP(ssid, pw);
+      Serial.println("");
+      Serial.print("AccessPoint: ");
+      Serial.println(ssid);
+      Serial.print("IP address: ");
+      Serial.println(WiFi.softAPIP());
+    }
   } else {
     ssid = "WaterLab";
     pw = "password";
