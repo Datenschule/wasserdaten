@@ -197,6 +197,8 @@ impl<'a, 'r> FromRequest<'a, 'r> for SensorPin {
 pub fn handle_send_data(measurement: Json<RawMeasurement>, waterlabid: WaterLab, pin: SensorPin) -> status::Accepted<String> {
     let connection = establish_connection();
 
+    println!(measurement);
+
     let utc: DateTime<Utc> = Utc::now();
     let ndt: NaiveDateTime = utc.naive_utc();
 

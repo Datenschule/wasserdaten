@@ -16,30 +16,26 @@
 #include <ESP8266WebServer.h>
 #include <ESP8266HTTPClient.h>
 #include <SoftwareSerial.h>
-#include <WiFiClient.h>
+#include <WiFiClientSecure.h>
 #include <WiFiUdp.h>
 
 #include "./lib/web/config.h"
 
 #define sendingInterval (1000UL * 60 * 5)
 
-ESP8266WebServer server(80);
-SoftwareSerial s(D2,D3); // (Rx, Tx)
-
-//**
-// Change these to what you need!
-//**
-const String host = "192.168.178.39:8000"; // local IP of server
-const String post_endpoint = "http://"+ host + "/api/v1/post-sensor-data"; // also server
-
-const String software_version = "0.0.1";
+const char* software_version = "0.0.1";
+const char* host = "wasser.datenschule.de";
+char* url = "/api/v1/post-sensor-data";
+const int httpsPort = 443;
+const char fingerprint[] PROGMEM = "CF C4 73 BA 5B 14 5C 2A 91 3A AA 5B 89 B5 1B 3A FF 37 2E 57";
+uint32_t chipid;
+String mac_address;
 
 const int networkCredAddress = 10;
 bool networkCredSet = false;
-String networkCredSeparator = "####";
-int networkCredSeparatorLength = networkCredSeparator.length();
-uint32_t chipid;
-String mac_address;
+const String networkCredSeparator = "####";
+const int networkCredSeparatorLength = networkCredSeparator.length();
+
 
 //**
 // Function declarations
@@ -47,14 +43,18 @@ String mac_address;
 void writeString(char add, String data);
 String read_String(char add);
 void clearStorage();
-void sendTemperature(float t, float h);
-void sendMoisture(int m);
+
+String getJsonObjectString(String type, float val);
+String makePostString(String sensor, int pin, String sensordata);
+
 void handleRoot();
 void handleConfig();
 void handlePostConfig();
 void handleGetStorage(); // debugging route, will ideally be deleted
 void handleReset();
 
+ESP8266WebServer server(80);
+SoftwareSerial s(D2,D3); // (Rx, Tx)
 
 void setup() {
   delay(500);
@@ -65,7 +65,7 @@ void setup() {
   chipid = ESP.getChipId();
   mac_address = WiFi.macAddress();
   WiFi.hostname("Wassersensor-" + String(chipid));
-  WiFi.mode(WIFI_OFF);        //Prevents reconnection issue (taking too long to connect)
+  WiFi.mode(WIFI_OFF);
   delay(500);
 
   String ssid;
@@ -73,16 +73,15 @@ void setup() {
   String data;
   
   data = read_String(networkCredAddress);
-  int pos = data.indexOf("####");
+  int pos = data.indexOf(networkCredSeparator);
   ssid = data.substring(0, pos);
-  pw = data.substring(pos + 4);
+  pw = data.substring(pos + networkCredSeparatorLength);
   
   if (ssid != "" && pw != "") {
       networkCredSet = true;
       Serial.println("Found cred, looks legit");
   }
   
-
   if (networkCredSet) {
     WiFi.mode(WIFI_STA);     
     WiFi.begin(ssid, pw);
@@ -128,7 +127,6 @@ void loop() {
     if(millis()- sendingTime > sendingInterval) {    
       if (s.available() > 0) {
         String data = s.readStringUntil('\n');
-        //Serial.println(data);
         char charBuf[data.length()];
         data.toCharArray(charBuf, data.length());
         
@@ -142,21 +140,59 @@ void loop() {
         }
         serializeJsonPretty(jsonBuffer, Serial);
 
+        WiFiClientSecure client;
+        Serial.print("connecting to ");
+        Serial.println(host);
+        Serial.printf("Using fingerprint '%s'\n", fingerprint);
+        client.setFingerprint(fingerprint);
+      
+        if (!client.connect(host, httpsPort)) {
+          Serial.println("connection failed");
+          return;
+        }
+
+        Serial.print("POSTing");
+
         float t = jsonBuffer["temperature"];
         float h = jsonBuffer["humidity"];
         if (!isnan(t) && !isnan(h)) {
-          sendTemperature(t, h);
+          String tJson = getJsonObjectString("temperature", t);
+          String hJson = getJsonObjectString("humidity", h);
+          Serial.print(makePostString("DHT22", 8, tJson + "," + hJson));
+          client.print(makePostString("DHT22", 8, tJson + "," + hJson));
         }
 
-        int m = jsonBuffer["moisture"];
+        float m = jsonBuffer["moisture"];
         if (!isnan(m)) {
-          sendMoisture(m);
+          String mJson = getJsonObjectString("moisture", m);
+          Serial.print(makePostString("CSMS", 14, mJson));
+          client.print(makePostString("CSMS", 14, mJson));
         }
-        
+
         sendingTime = millis();
       }
     }
   }
+}
+
+String getJsonObjectString(String type, float val) {
+  return "{\"value_type\": \""+ type +"\", \"value\": "+ val +"}";
+}
+
+String makePostString(String sensor, int pin, String sensordata) {
+  String content = "{\"sensor\": \""+ sensor +"\", "+
+             "\"software_version\": \""+ software_version +"\", "+
+             "\"sensordatavalues\": ["+ sensordata +"]}";
+  
+  return String("POST ") + url + " HTTP/1.1\r\n" +
+                "Host: " + host + "\r\n" +
+                "User-Agent: WaterLab-ESP8266\r\n" +
+                "Content-Type: application/json\r\n" +
+                "X-Sensor: esp8266-"+ mac_address +"\r\n" + 
+                "X-Pin: "+ pin +"\r\n" +
+                "Content-Length: "+ content.length() +"\r\n\r\n" + 
+                content + "\r\n" + 
+                "Connection: close\r\n\r\n";
 }
 
 /*
@@ -181,7 +217,7 @@ void handlePostConfig() {
   if (new_ssid && new_password) {
       String s1 = String(new_ssid);
       String s2 = String(new_password);
-      writeString(networkCredAddress, s1 + "####" + s2);
+      writeString(networkCredAddress, s1 + networkCredSeparator + s2);
       server.send(200, "application/json", "{\"success\": \"SSID and password saved\"}");
   }
   server.send(400, "application/json", "{\"error\": \"Not right\"}");
@@ -192,10 +228,10 @@ void handleGetStorage() {
   String pwData;
   String data;
   data = read_String(networkCredAddress);
-  int pos = data.indexOf("####");
+  int pos = data.indexOf(networkCredSeparator);
   if (pos) {
     ssidData = data.substring(0, pos);
-    pwData = data.substring(pos + 4);
+    pwData = data.substring(pos + networkCredSeparatorLength);
     server.send(200, "application/json", "{\"ssid\": \""+ ssidData +"\", \"pw\": \"" + pwData +"\"}"); 
   } else {
     Serial.println("Error: Could not find position of separator");  
@@ -205,53 +241,6 @@ void handleGetStorage() {
 void handleReset() {
   clearStorage();
   server.send(200, "application/json", "{\"notice\": \"You won't even see this\"}"); 
-}
-
-void sendTemperature(float t, float h) {
-  HTTPClient http;
-  http.begin(post_endpoint);
-  http.addHeader("Content-Type", "application/json");
-  http.addHeader("X-Sensor", "esp8266-" + mac_address);
-  http.addHeader("X-Pin", "8"); // should be config var
-  
-  String payload;
-  StaticJsonDocument<300> jsonBuffer;
-  JsonObject root = jsonBuffer.createNestedObject("data");
-  root["software_version"] = software_version;
-  root["sensor"] = "DHT22";
-  JsonArray measurements = root.createNestedArray("sensordatavalues");
-  JsonObject measurement1 = measurements.createNestedObject();
-  measurement1["value_type"] = "temperature";
-  measurement1["value"] = t;
-  JsonObject measurement2 = measurements.createNestedObject();
-  measurement2["value_type"] = "humidity";
-  measurement2["value"] = h;
-  serializeJson(root, payload);
-
-  int httpCode = http.POST(payload);
-  http.end();
-}
-
-void sendMoisture(int m) {
-  HTTPClient http;
-  http.begin(post_endpoint);
-  http.addHeader("Content-Type", "application/json");
-  http.addHeader("X-Sensor", "esp8266-" + mac_address);
-  http.addHeader("X-Pin", "14"); // should be config var
-  
-  String payload;
-  StaticJsonDocument<300> jsonBuffer;
-  JsonObject root = jsonBuffer.createNestedObject("data");
-  root["software_version"] = software_version;
-  root["sensor"] = "CSMS";
-  JsonArray measurements = root.createNestedArray("sensordatavalues");
-  JsonObject measurement1 = measurements.createNestedObject();
-  measurement1["value_type"] = "moisture";
-  measurement1["value"] = m;
-  serializeJson(root, payload);
-
-  int httpCode = http.POST(payload);
-  http.end();
 }
 
 
