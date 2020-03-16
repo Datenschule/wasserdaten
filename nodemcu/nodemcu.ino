@@ -191,8 +191,8 @@ String makePostString(String sensor, int pin, String sensordata) {
                 "X-Sensor: esp8266-"+ mac_address +"\r\n" + 
                 "X-Pin: "+ pin +"\r\n" +
                 "Content-Length: "+ content.length() +"\r\n\r\n" + 
-                content + "\r\n" + 
-                "Connection: close\r\n\r\n";
+                content + "\r\n\r\n";
+                // connection close??
 }
 
 /*
