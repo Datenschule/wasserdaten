@@ -135,28 +135,28 @@ void sendData(Task* me) {
   // turbidity in V
   double turbAverage = averagearray(turbArray, ArrayLength);
   double turb = turbAverage * (VOLTAGE / 1024.0);
-  if (turb > 0.00) {
+  if (turb > 0.00 && turb <= 4.50) {
     packObject(arr, "turbidity", "SEN0189", TURB_PIN, turb);
   }
   
   // or potential in mV
   double orpAverage = averagearray(orpArray, ArrayLength); 
   double orp = ((30*(double)VOLTAGE * 1000)-(75*orpAverage*VOLTAGE*1000/1024))/75-ORP_OFFSET;
-  if (orp > 0.00) {
+  if (orp > -2000.00 && orp < 2000.00) {
     packObject(arr, "oxidation_reduction_potential", "SEN0165", ORP_PIN, orp);
   }
 
   // pH Value between 0 and 14, 7 is neutral
   double phAverage = averagearray(phArray, ArrayLength); 
   double ph = 3.5 * (phAverage * VOLTAGE /1024) + PH_OFFSET;
-  if (ph > 0.00) {
+  if (ph > 0.00 && ph < 14.00) {
     packObject(arr, "pH", "SEN0161", PH_PIN, ph);
   }
 
   // dissolved oxygen in mg/L
   double disoAverage = averagearray(disoArray, ArrayLength);
   float diso = pgm_read_float_near( &SaturationValueTab[0] + (int)(SaturationDisoTemperature+0.5) ) * (disoAverage * VOLTAGE / 1024) / SaturationDisoVoltage;
-  if (diso > 0.00) {
+  if (diso > 0.00 && diso < 20.00) {
     packObject(arr, "dissolved_oxygen", "SEN0237-A", DISO_PIN, diso);  
   }
 
@@ -167,7 +167,7 @@ void sendData(Task* me) {
   float temperature = 25.00;
   double ecAverage = averagearray(ecArray, ArrayLength);
   double ec = ecHelper.readEC(ecAverage * VOLTAGE/ 1024, temperature);
-  if (ec > 0.00) {
+  if (ec > 10.00 && ec < 100.00) {
     packObject(arr, "electrical_conductivity", "DFR0300-H", EC_PIN, ec);  
   }
   
