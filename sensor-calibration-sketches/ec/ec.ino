@@ -21,7 +21,7 @@
 #include <EEPROM.h>
 
 #define EC_PIN A1
-float voltage,ecValue,temperature = 25;
+float voltage,ecValue,temperature = 19.0;
 DFRobot_EC10 ec;
 
 void setup()
