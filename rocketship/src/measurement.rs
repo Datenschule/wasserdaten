@@ -1,6 +1,8 @@
-use super::*;
+use super::schema;
+use super::models::*;
 use chrono::prelude::*;
 use diesel::pg::PgConnection;
+use diesel::RunQueryDsl;
 
 pub fn create_measurement<'a>(conn: &PgConnection,
                               created_at: NaiveDateTime,

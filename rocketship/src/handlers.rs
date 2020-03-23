@@ -11,7 +11,7 @@ use rocket::request::{self, FromRequest};
 use rocket_contrib::templates::Template;
 
 use super::schema;
-use super::lib::*;
+use super::*;
 use super::models::*;
 use super::measurement::*;
 

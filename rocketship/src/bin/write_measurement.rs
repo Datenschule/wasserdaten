@@ -2,37 +2,53 @@ extern crate chrono;
 extern crate diesel;
 extern crate rocketship;
 
-use chrono::prelude::*;
-use self::rocketship::*;
+use self::lib::*;
+use self::measurement::*;
+
 use std::io::{stdin, Read};
+use chrono::prelude::*;
+use chrono::{NaiveDateTime};
 
 fn main() {
     let connection = establish_connection();
 
+    println!("What lab?");
+    let mut lab = String::new();
+    stdin().read_line(&mut lab).unwrap();
+    let sensor = &lab[..(lab.len() - 1)];
+
     println!("What sensor?");
     let mut sensor = String::new();
     stdin().read_line(&mut sensor).unwrap();
-    let sensor = &sensor[..(sensor.len() - 1)]; // Drop the newline character
-    let sensor = &sensor.parse::<i32>().unwrap();
+    let sensor = &sensor[..(sensor.len() - 1)];
 
-    println!("What sampling rate?");
-    let mut sample = String::new();
-    stdin().read_line(&mut sample).unwrap();
-    let sample = &sample[..(sample.len() - 1)]; // Drop the newline character
-    let sample = sample.parse::<i32>().unwrap();
+    println!("What pin?");
+    let mut pin = String::new();
+    stdin().read_line(&mut pin).unwrap();
+    let pin = &pin[..(pin.len() - 1)];
+    let pin = &pin.parse::<i32>().unwrap();
 
     let utc: DateTime<Utc> = Utc::now();
-    let time: NaiveDateTime = utc.naive_utc();
+    let ndt: NaiveDateTime = utc.naive_utc();
 
-    let measurement = create_measurement(&connection, time, sample, *sensor);
+    if let Some(m) = create_measurement(&connection,
+                                        ndt,
+                                        lab.to_string(),
+                                        sensor.to_string(),
+                                        pin,
+                                        "0.0.test".to_string()) {
 
-    let pair = create_measurement_pair(&connection, measurement.id, "test", 23.99);
-    println!("\nSaved measurement with id {}", measurement.id);
-    println!("\nSaved measurement pair with id {}", pair.id);
+        let pair = create_measurement_pair(&connection, m.id, "test", 23.99);
+
+        println!("\nSaved measurement with id {}", m.id);
+        println!("\nSaved measurement pair with id {}", pair.id);
+    }
 }
 
+/*
 #[cfg(not(windows))]
 const EOF: &'static str = "CTRL+D";
 
 #[cfg(windows)]
 const EOF: &'static str = "CTRL+Z";
+*/
