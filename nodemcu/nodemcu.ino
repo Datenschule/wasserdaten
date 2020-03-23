@@ -3,11 +3,12 @@
  * 
  * Pinout
  * 
- * D2 (Rx) -> Arduino 2 (Tx)
- * D3 (Tx) -> Arduino 3 (Rx)
+ * D6 -> Arduino 8
+ * D5 -> Arduino 9
  * 
  * 
  * NodeMCU and Arduino need to share GND
+ * 
  */
 
 #include <ArduinoJson.h>
@@ -18,35 +19,32 @@
 #include <SoftwareSerial.h>
 #include <WiFiClientSecure.h>
 #include <WiFiUdp.h>
-
 #include "./lib/web/config.h"
-
-#define sendingInterval (1000UL * 60 * 5)
 
 const char* software_version = "0.0.1";
 const char* host = "wasser.datenschule.de";
-char* url = "/api/v1/post-sensor-data";
+const char* url = "/api/v1/post-sensor-data";
 const int httpsPort = 443;
 const char fingerprint[] PROGMEM = "CF C4 73 BA 5B 14 5C 2A 91 3A AA 5B 89 B5 1B 3A FF 37 2E 57";
-uint32_t chipid;
-String mac_address;
-
 const int networkCredAddress = 10;
-bool networkCredSet = false;
 const String networkCredSeparator = "####";
 const int networkCredSeparatorLength = networkCredSeparator.length();
 
+uint32_t chipid;
+String mac_address;
+String ssid, pw;
+bool networkCredSet = false;
 
-//**
-// Function declarations
-//**
+/*
+ * Function declarations
+ */
 void writeString(char add, String data);
 String read_String(char add);
 void clearStorage();
-
 String getJsonObjectString(String type, float val);
 String makePostString(String sensor, int pin, String sensordata);
-
+void goIntoAPMode();
+void goIntoSTAMode();
 void handleRoot();
 void handleConfig();
 void handlePostConfig();
@@ -54,143 +52,91 @@ void handleGetStorage(); // debugging route, will ideally be deleted
 void handleReset();
 
 ESP8266WebServer server(80);
-SoftwareSerial s(D2,D3); // (Rx, Tx)
+SoftwareSerial swSer;
 
 void setup() {
-  delay(500);
-  s.begin(4800); // same as Arduino
-  Serial.begin(9600);
+  delay(300);
+  swSer.begin(19200, SWSERIAL_8N1, D5, D6, false, 95, 11);
+  Serial.begin(19200);
   EEPROM.begin(512);
   
   chipid = ESP.getChipId();
   mac_address = WiFi.macAddress();
-  WiFi.hostname("Wassersensor-" + String(chipid));
   WiFi.mode(WIFI_OFF);
   delay(500);
 
-  String ssid;
-  String pw;
+  // read form EEPROM, check if wifi credentials have been set
   String data;
-  
   data = read_String(networkCredAddress);
   int pos = data.indexOf(networkCredSeparator);
   ssid = data.substring(0, pos);
   pw = data.substring(pos + networkCredSeparatorLength);
   
   if (ssid != "" && pw != "") {
-      networkCredSet = true;
-      Serial.println("Found cred, looks legit");
+    networkCredSet = true;
+    Serial.println("Found cred, looks legit");
   }
   
   if (networkCredSet) {
-    WiFi.mode(WIFI_STA);     
-    WiFi.begin(ssid, pw);
-
-    Serial.print("Connecting");
-    int try_counter = 0;
-    while (WiFi.status() != WL_CONNECTED && try_counter < 20) {
-      delay(500);
-      Serial.print(".");
-      try_counter++;
-    }
-    if (WiFi.status() == WL_CONNECTED) {
-      Serial.print("Connected to ");
-      Serial.println(ssid);
-      Serial.print("IP address: ");
-      Serial.println(WiFi.localIP());  //IP address assigned to your ESP
-      Serial.print("Hostname: ");
-      Serial.println("WaterLab-" + String(chipid));
-    } else {
-      // this should be nicer
-      // when creds were set but it still can't connect
-      Serial.println("");
-      Serial.println("Could not connect to credentials, opening access point");
-      ssid = "WaterLab";
-      pw = "password";
-      WiFi.mode(WIFI_AP);  
-      WiFi.softAP(ssid, pw);
-      Serial.println("");
-      Serial.print("AccessPoint: ");
-      Serial.println(ssid);
-      Serial.print("IP address: ");
-      Serial.println(WiFi.softAPIP());
-    }
+    goIntoSTAMode();
   } else {
-    ssid = "WaterLab";
-    pw = "password";
-    WiFi.mode(WIFI_AP);  
-    WiFi.softAP(ssid, pw);
-    Serial.println("");
-    Serial.print("AccessPoint: ");
-    Serial.println(ssid);
-    Serial.print("IP address: ");
-    Serial.println(WiFi.softAPIP());
+    goIntoAPMode();
   }
 
   server.on("/", handleRoot);
   server.on("/config", handleConfig);
   server.on("/post_config", handlePostConfig);
-  server.on("/get_storage", handleGetStorage);
+  server.on("/get_storage", handleGetStorage); // for debugging, should be removed
   server.on("/reset", handleReset);
   server.begin();
 }
 
-
 void loop() {
   server.handleClient(); 
-  
-  static unsigned long sendingTime = millis();
-  if (networkCredSet) {
-    if(millis()- sendingTime > sendingInterval) {    
-      if (s.available() > 0) {
-        String data = s.readStringUntil('\n');
-        char charBuf[data.length()];
-        data.toCharArray(charBuf, data.length());
-        
-        StaticJsonDocument<500> jsonBuffer;
-        DeserializationError error;
-        error = deserializeJson(jsonBuffer, charBuf, DeserializationOption::NestingLimit(10));
-      
-        if (error) {
-          Serial.println(error.c_str());
-          return;
-        }
-        serializeJsonPretty(jsonBuffer, Serial);
 
-        WiFiClientSecure client;
-        Serial.print("connecting to ");
-        Serial.println(host);
-        Serial.printf("Using fingerprint '%s'\n", fingerprint);
-        client.setFingerprint(fingerprint);
-      
-        if (!client.connect(host, httpsPort)) {
-          Serial.println("connection failed");
-          return;
-        }
+  if (networkCredSet) { 
+    if (swSer.available() > 0) {
+      // reading from Serial
+      String data = swSer.readStringUntil('\n');
+      char charBuf[data.length()];
+      StaticJsonDocument<900> jsonBuffer;
+      DeserializationError error;
+      error = deserializeJson(jsonBuffer, data);
+      if (error) {
+        Serial.println(error.c_str());
+        return;
+      }
 
-        Serial.print("POSTing");
+      // opening HTTPS connection
+      WiFiClientSecure client;
+      Serial.print("connecting to ");
+      Serial.println(host);
+      Serial.printf("Using fingerprint '%s'\n", fingerprint);
+      client.setFingerprint(fingerprint);
+      if (!client.connect(host, httpsPort)) {
+        Serial.println("Secure connection failed");
+        return;
+      }
 
-        float t = jsonBuffer["temperature"];
-        float h = jsonBuffer["humidity"];
-        if (!isnan(t) && !isnan(h)) {
-          String tJson = getJsonObjectString("temperature", t);
-          String hJson = getJsonObjectString("humidity", h);
-          Serial.print(makePostString("DHT22", 8, tJson + "," + hJson));
-          client.print(makePostString("DHT22", 8, tJson + "," + hJson));
-        }
-
-        float m = jsonBuffer["moisture"];
-        if (!isnan(m)) {
-          String mJson = getJsonObjectString("moisture", m);
-          Serial.print(makePostString("CSMS", 14, mJson));
-          client.print(makePostString("CSMS", 14, mJson));
-        }
-
-        sendingTime = millis();
+      Serial.print("POSTing");
+      // post for every available value
+      JsonArray arr = jsonBuffer[0].as<JsonArray>();
+      for ( int i = 0; i < arr.size(); i++) {
+        String sensor = jsonBuffer[0][i]["sensor"];
+        int pin = jsonBuffer[0][i]["pin"];
+        String type = jsonBuffer[0][i]["type"];
+        float value = jsonBuffer[0][i]["value"];
+        String json = getJsonObjectString(type, value);
+        client.print(makePostString(sensor, pin, json));
+        //Serial.print(makePostString(sensor, pin, json));  
       }
     }
   }
 }
+
+/*
+ * JSON PREP
+ */
 
 String getJsonObjectString(String type, float val) {
   return "{\"value_type\": \""+ type +"\", \"value\": "+ val +"}";
@@ -240,6 +186,47 @@ void handlePostConfig() {
   server.send(400, "application/json", "{\"error\": \"Not right\"}");
 } 
 
+/*
+ * WIFI SETUP
+ */
+void goIntoAPMode() {
+  ssid = "WaterLab";
+  pw = "password";
+  WiFi.mode(WIFI_AP);  
+  WiFi.softAP(ssid, pw);
+  Serial.println("");
+  Serial.print("AccessPoint: ");
+  Serial.println(ssid);
+  Serial.print("IP address: ");
+  Serial.println(WiFi.softAPIP());
+}
+
+void goIntoSTAMode() {
+  WiFi.mode(WIFI_STA);
+  WiFi.hostname("Wassersensor-" + String(chipid));     
+  WiFi.begin(ssid, pw);
+  Serial.print("Connecting");
+  int try_counter = 0;
+  while (WiFi.status() != WL_CONNECTED && try_counter < 20) {
+    delay(500);
+    Serial.print(".");
+    try_counter++;
+  }
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.print("Connected to ");
+    Serial.println(ssid);
+    Serial.print("IP address: ");
+    Serial.println(WiFi.localIP());
+    Serial.print("Hostname: ");
+    Serial.println(WiFi.hostname());
+  } else {
+    Serial.println("");
+    Serial.println("Could not connect to WiFi, opening access point");
+    goIntoAPMode();
+  } 
+}
+
+
 void handleGetStorage() {
   String ssidData;
   String pwData;
@@ -257,7 +244,7 @@ void handleGetStorage() {
 
 void handleReset() {
   clearStorage();
-  server.send(200, "application/json", "{\"notice\": \"You won't even see this\"}"); 
+  server.send(200, "application/json", "{\"notice\": \"Storage cleared\"}"); 
 }
 
 
