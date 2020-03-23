@@ -31,7 +31,7 @@
 
 #define EEPROM_write(address, p) {int i = 0; byte *pp = (byte*)&(p);for(; i < sizeof(p); i++) EEPROM.write(address+i, pp[i]);}
 #define EEPROM_read(address, p)  {int i = 0; byte *pp = (byte*)&(p);for(; i < sizeof(p); i++) pp[i]=EEPROM.read(address+i);}
-#define uartInterval 2000
+#define uartInterval 1000 * 60 * 2 // two minute intervals
 #define samplingInterval 40
 #define ArrayLength  40
 #define VOLTAGE  5.0
@@ -90,10 +90,10 @@ Task sampleTask(samplingInterval, takeSample);
 Task dataTask(uartInterval, sendData);
 
 void setup() {
-  Serial.begin(9600);
-  Serial.println("start");
-  altSerial.begin(9600);
-  altSerial.println("Hello World");
+  Serial.begin(19200);
+  //Serial.println("start");
+  altSerial.begin(19200);
+  //altSerial.println("Hello World");
   ecHelper.begin();
   readDisoCharacteristicValues();
  
@@ -163,16 +163,18 @@ void sendData(Task* me) {
   // electrical conductivity in ms/cm
   // the ec sensor needs a temperature to calcualte conductivity
   // as long as we don't have the temp sensor in the setup 
-  // we just fake ideal 25^C;
-  float temperature = 25.00;
+  // we just fake something;
+  float temperature = 18.00;
   double ecAverage = averagearray(ecArray, ArrayLength);
   double ec = ecHelper.readEC(ecAverage * VOLTAGE/ 1024, temperature);
-  if (ec > 10.00 && ec < 100.00) {
+  if (ec > 0.00 && ec < 100.00) {
     packObject(arr, "electrical_conductivity", "DFR0300-H", EC_PIN, ec);  
   }
   
-  serializeJsonPretty(doc, Serial);
+  serializeJson(doc, Serial);
+  Serial.print("\n");
   serializeJson(doc, altSerial);
+  altSerial.print("\n");
 }
 
 void packObject(JsonArray parentArray, String type, String sensor, int pin, double value) {
