@@ -23,6 +23,7 @@ Calibrate the sensors as described in the manufacturer's wiki (links in the sket
 All sensors are analog, the expected connections are:
 
 | sensor | Arduino Uno |
+|-------|---------|
 |  Turbidity | A0           |
 | ORP | A1 |
 |ph | A2 |
