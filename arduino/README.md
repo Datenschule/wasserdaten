@@ -33,7 +33,8 @@ All sensors are analog, the expected connections are:
 
 ## Software
 
-Note that it's quite hard to figure out if an analog signal is actually connected or not. While there is a little plausibility check in place before serializing the data, natural changes in the current can give fake signals (especially since some of the sensors draw quite a but of current).
+Note that it's quite hard to figure out if an analog signal is actually connected or not. While there is a little plausibility check in place before serializing the data, fluctuation in the current can give fake signals (especially since some of the sensors draw quite a bit of current).
+
 If you already know you won't be using a certain sensor in your setup, just comment out the respective code blocks. They should be easy to spot.
 
 ### Add additional libraries
