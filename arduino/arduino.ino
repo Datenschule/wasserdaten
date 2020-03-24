@@ -3,8 +3,8 @@
  * 
  * Uno pinout
  * 
- * 9 (Tx) -> NodeMCU D3 (Rx)
- * 8 (Rx) -> NodeMcu D2 (Tx)
+ * 9 -> NodeMCU D5
+ * 8 -> NodeMcu D6
  * 
  * 
  * A0 -> Turbidity
