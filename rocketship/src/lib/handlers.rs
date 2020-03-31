@@ -28,7 +28,6 @@ pub fn api_get_measurements() -> Json<Vec<Measurement>> {
 
     let connection = establish_connection();
     let results = measurements
-        .limit(100)
         .load::<Measurement>(&connection)
         .expect("Error fetching measurements");
     Json(results)
@@ -120,7 +119,6 @@ pub fn api_get_lab(lab_id: String) -> Json<Vec<Measurement>> {
     let connection = establish_connection();
     let results = measurements
         .filter(lab.eq(lab_id))
-        .limit(100)
         .load::<Measurement>(&connection)
         .expect("Error fetching measurements");
 
@@ -134,7 +132,6 @@ pub fn api_get_sensor(sensor_id: String) -> Json<Vec<Measurement>> {
     let connection = establish_connection();
     let results = measurements
         .filter(sensor.eq(sensor_id))
-        .limit(100)
         .load::<Measurement>(&connection)
         .expect("Error fetching measurements");
 
@@ -148,7 +145,6 @@ pub fn api_get_phenomenon(phen_id: String) -> Json<Vec<MeasurementPair>> {
     let connection = establish_connection();
     let results = measurement_pairs
         .filter(value_type.eq(phen_id))
-        .limit(100)
         .load::<MeasurementPair>(&connection)
         .expect("Error fetching measurements");
 

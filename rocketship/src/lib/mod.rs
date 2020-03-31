@@ -8,7 +8,6 @@ extern crate rocket;
 extern crate serde;
 extern crate serde_derive;
 
-
 use diesel::prelude::*;
 use diesel::pg::PgConnection;
 use dotenv::dotenv;
