@@ -20,6 +20,10 @@ path = "src/show_measurement.rs"
 name = "write_measurement"
 path = "src/write_measurement.rs"
 
+[[bin]]
+name = "delete_measurement"
+path = "src/delete_measurement.rs"
+
 
 [dependencies]
 chrono = { version = "0.4", features = ["serde", "rustc-serialize"]} 
