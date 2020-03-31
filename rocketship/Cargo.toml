@@ -4,6 +4,27 @@ version = "0.1.0"
 authors = ["lislis <mail@lislis.de>"]
 edition = "2018"
 
+[lib]
+name = "rocketlib"
+path = "src/lib/mod.rs"
+
+[[bin]]
+name = "server"
+path = "src/server.rs"
+
+[[bin]]
+name = "show_measurement"
+path = "src/show_measurement.rs"
+
+[[bin]]
+name = "write_measurement"
+path = "src/write_measurement.rs"
+
+[[bin]]
+name = "delete_measurement"
+path = "src/delete_measurement.rs"
+
+
 [dependencies]
 chrono = { version = "0.4", features = ["serde", "rustc-serialize"]} 
 diesel = { version = "1.0.0", features = ["postgres", "chrono"] }
