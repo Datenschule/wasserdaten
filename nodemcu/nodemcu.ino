@@ -18,6 +18,7 @@
 #include <ESP8266HTTPClient.h>
 #include <SoftwareSerial.h>
 #include <WiFiClientSecure.h>
+#include <WiFiClient.h>
 #include <WiFiUdp.h>
 #include "./lib/web/config.h"
 

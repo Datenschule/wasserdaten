@@ -20,9 +20,9 @@ WORKDIR /app
 COPY ./ /app
 
 RUN cargo build --release --bin server \
-    && cargo build --bin show_measurements \
-    && cargo build --bin write_measurements \
-    && cargo build --bin delete_measurements
+    && cargo build --bin show_measurement \
+    && cargo build --bin write_measurement \
+    && cargo build --bin delete_measurement
 
 # I'm running these manually in the container for now...
 # some weird db connection error is causing trouble
