@@ -19,7 +19,10 @@ RUN set -eux; \
 WORKDIR /app
 COPY ./ /app
 
-RUN cargo build --release --bin rocketship
+RUN cargo build --release --bin server \
+    && cargo build --bin show_measurements \
+    && cargo build --bin write_measurements \
+    && cargo build --bin delete_measurements
 
 # I'm running these manually in the container for now...
 # some weird db connection error is causing trouble
@@ -28,4 +31,4 @@ RUN cargo build --release --bin rocketship
 #RUN cargo install diesel_cli
 #RUN diesel setup
 
-ENTRYPOINT ["/app/target/release/rocketship"]
+ENTRYPOINT ["/app/target/release/server"]
