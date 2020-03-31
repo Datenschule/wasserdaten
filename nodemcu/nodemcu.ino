@@ -27,6 +27,7 @@ const char* host = "wasser.datenschule.de";
 const char* url = "/api/v1/post-sensor-data";
 const int httpsPort = 443;
 const char fingerprint[] PROGMEM = "CF C4 73 BA 5B 14 5C 2A 91 3A AA 5B 89 B5 1B 3A FF 37 2E 57";
+//const char* sensorCommunityUrl = "api.sensor.community/v1/push-sensor-data/";
 const int networkCredAddress = 10;
 const String networkCredSeparator = "####";
 const int networkCredSeparatorLength = networkCredSeparator.length();
@@ -43,6 +44,7 @@ void writeString(char add, String data);
 String read_String(char add);
 void clearStorage();
 String getJsonObjectString(String type, float val);
+String makePayloadString(String sensor, String sensordata);
 String makePostString(String sensor, int pin, String sensordata);
 void goIntoAPMode();
 void goIntoSTAMode();
@@ -120,6 +122,8 @@ void loop() {
       }
 
       Serial.print("POSTing");
+      //HTTPClient http; // for sensor.community
+      
       // post for every available value
       JsonArray arr = jsonBuffer[0].as<JsonArray>();
       for ( int i = 0; i < arr.size(); i++) {
@@ -128,9 +132,25 @@ void loop() {
         String type = jsonBuffer[0][i]["type"];
         float value = jsonBuffer[0][i]["value"];
         String json = getJsonObjectString(type, value);
-        client.print(makePostString(sensor, pin, json));
+        
+        // debug if you will
         //Serial.print(makePostString(sensor, pin, json));  
+        
+        // post https to wasser.datenschule
+        client.print(makePostString(sensor, pin, json));
+
+        /*
+        // post http to sensor.community
+        http.begin(sensorCommunityUrl);
+        http.addHeader("Content-Type", "application/json");
+        http.addHeader("X-Sensor", "esp8266-"+ mac_address);
+        http.addHeader("X-Pin", pin);
+        String postData = makePayloadString(sensor, json);
+        int httpCode = http.POST(postData);   //Send the request
+        String payload = http.getString();    //Get the response payload
+        */
       }
+      // http.end(); // for sensor.community
     }
   }
 }
@@ -143,11 +163,15 @@ String getJsonObjectString(String type, float val) {
   return "{\"value_type\": \""+ type +"\", \"value\": "+ val +"}";
 }
 
-String makePostString(String sensor, int pin, String sensordata) {
+String makePayloadString(String sensor, String sensordata) {
   String content = "{\"sensor\": \""+ sensor +"\", "+
              "\"software_version\": \""+ software_version +"\", "+
              "\"sensordatavalues\": ["+ sensordata +"]}";
-  
+  return content;
+}
+
+String makePostString(String sensor, int pin, String sensordata) {
+  String content = makePayloadString(sensor, sensordata);
   return String("POST ") + url + " HTTP/1.1\r\n" +
                 "Host: " + host + "\r\n" +
                 "User-Agent: WaterLab-ESP8266\r\n" +
