@@ -7,7 +7,7 @@ class App < Sinatra::Base
     'Is this, IoT?'
   end
 
-  post '/send-data' do
+  post '/post-sensor-data' do
     #puts JSON.pretty_generate(request.env)
     #puts "+++++++++++++++++++++"
     data = JSON.parse( request.body.read.to_s )

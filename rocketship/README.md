@@ -2,8 +2,10 @@
 
 Rocketship is a barebones API server for storing and reading water measurement data collected by the sensors described in this repository.
 
-It uses [Rocket]() as webframework and [Diesel]() as ORM.
+It uses [Rocket](https://rocket.rs/) as webframework and [Diesel](https://diesel.rs/) as ORM.
 
+
+See a running version at https://wasser.datenschule.de/
 
 ## Run Rocketship locally
 
