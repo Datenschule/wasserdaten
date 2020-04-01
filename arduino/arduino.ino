@@ -31,7 +31,7 @@
 
 #define EEPROM_write(address, p) {int i = 0; byte *pp = (byte*)&(p);for(; i < sizeof(p); i++) EEPROM.write(address+i, pp[i]);}
 #define EEPROM_read(address, p)  {int i = 0; byte *pp = (byte*)&(p);for(; i < sizeof(p); i++) pp[i]=EEPROM.read(address+i);}
-#define uartInterval 1000 * 60 * 2 // two minute intervals
+#define uartInterval 60000 
 #define samplingInterval 40
 #define ArrayLength  40
 #define VOLTAGE  5.0
@@ -101,7 +101,7 @@ void setup() {
   SoftTimer.add(&dataTask);
 }
 
-void takeSample(Task* me) { 
+void takeSample(Task* me) {
   if (analogRead(TURB_PIN) > 0.00) {
     turbArray[turbArrayIndex++]= analogRead(TURB_PIN);
     if(turbArrayIndex==ArrayLength) turbArrayIndex=0;
@@ -131,7 +131,7 @@ void takeSample(Task* me) {
 void sendData(Task* me) {
   StaticJsonDocument<500> doc;
   JsonArray arr = doc.createNestedArray();
-  
+
   // turbidity in V
   double turbAverage = averagearray(turbArray, ArrayLength);
   double turb = turbAverage * (VOLTAGE / 1024.0);
@@ -170,7 +170,6 @@ void sendData(Task* me) {
   if (ec > 0.00 && ec < 100.00) {
     packObject(arr, "electrical_conductivity", "DFR0300-H", EC_PIN, ec);  
   }
-  
   serializeJson(doc, Serial);
   Serial.print("\n");
   serializeJson(doc, altSerial);
